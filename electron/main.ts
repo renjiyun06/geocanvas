@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from "electron";
+import { app, BrowserWindow, ipcMain, Menu } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -33,7 +33,10 @@ function createWindow() {
   });
 }
 
-app.whenReady().then(createWindow);
+app.whenReady().then(() => {
+  Menu.setApplicationMenu(null);
+  createWindow();
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
