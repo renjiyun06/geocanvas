@@ -14,12 +14,14 @@ import type {
 import "tldraw/tldraw.css";
 import { GeoGebraShapeUtil } from "./shapes/GeoGebraShape";
 import { GeoGebraTool } from "./shapes/GeoGebraTool";
+import { ChatShapeUtil } from "./shapes/ChatShape";
+import { ChatTool } from "./shapes/ChatTool";
 
 // Custom shape utils
-const customShapeUtils = [GeoGebraShapeUtil];
+const customShapeUtils = [GeoGebraShapeUtil, ChatShapeUtil];
 
 // Custom tools
-const customTools = [GeoGebraTool];
+const customTools = [GeoGebraTool, ChatTool];
 
 // UI overrides: register the GeoGebra tool
 const uiOverrides: TLUiOverrides = {
@@ -33,6 +35,15 @@ const uiOverrides: TLUiOverrides = {
         editor.setCurrentTool("geogebra");
       },
     };
+    tools.chat = {
+      id: "chat",
+      icon: "chat-icon",
+      label: "AI 对话",
+      kbd: "c",
+      onSelect: () => {
+        editor.setCurrentTool("chat");
+      },
+    };
     return tools;
   },
 };
@@ -42,12 +53,17 @@ const components: TLComponents = {
   Toolbar: (props) => {
     const tools = useTools();
     const isGeoGebraSelected = useIsToolSelected(tools["geogebra"]);
+    const isChatSelected = useIsToolSelected(tools["chat"]);
     return (
       <DefaultToolbar {...props}>
         <DefaultToolbarContent />
         <TldrawUiMenuItem
           {...tools["geogebra"]}
           isSelected={isGeoGebraSelected}
+        />
+        <TldrawUiMenuItem
+          {...tools["chat"]}
+          isSelected={isChatSelected}
         />
       </DefaultToolbar>
     );
@@ -58,6 +74,7 @@ const components: TLComponents = {
 const customAssetUrls: TLUiAssetUrlOverrides = {
   icons: {
     "geogebra-icon": "/geogebra-icon.svg",
+    "chat-icon": "/chat-icon.svg",
   },
 };
 
