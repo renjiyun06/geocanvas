@@ -39,6 +39,11 @@ export function getNextGeoGebraLabel(): string {
   return `画板 ${geogebraCounter}`;
 }
 
+/** Convert tldraw shape ID to a safe GeoGebra applet ID */
+function toGgbId(shapeId: string): string {
+  return shapeId.replace(/[^a-zA-Z0-9]/g, "_");
+}
+
 // --- GeoGebra component rendered inside the shape ---
 
 function GeoGebraEmbed({ shape }: { shape: IGeoGebraShape }) {
@@ -92,7 +97,8 @@ function GeoGebraEmbed({ shape }: { shape: IGeoGebraShape }) {
       if (!el || appletRef.current) return;
 
       const ggbElement = document.createElement("div");
-      ggbElement.id = `ggb-${shape.id}`;
+      const ggbId = toGgbId(shape.id);
+      ggbElement.id = `ggb-${ggbId}`;
       el.appendChild(ggbElement);
 
       const params = {
@@ -103,9 +109,11 @@ function GeoGebraEmbed({ shape }: { shape: IGeoGebraShape }) {
         showAlgebraInput: true,
         showMenuBar: false,
         allowStyleBar: true,
-        id: shape.id,
+        id: ggbId,
         appletOnLoad: (api: any) => {
           ggbApiRef.current = api;
+          // Also store on window with original shapeId for canvas-api access
+          (window as any)[shape.id] = api;
         },
       };
 

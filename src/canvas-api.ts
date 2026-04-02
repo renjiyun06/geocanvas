@@ -142,6 +142,9 @@ export function executeGeoGebraCommand(
 
   try {
     const result = api.evalCommand(command);
+    if (result === false) {
+      return { success: false, error: `GeoGebra rejected the command: "${command}". Check syntax and object names.` };
+    }
     return { success: true };
   } catch (e: any) {
     return { success: false, error: e.message || String(e) };
