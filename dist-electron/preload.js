@@ -1,18 +1,20 @@
-import { contextBridge, ipcRenderer } from "electron";
-contextBridge.exposeInMainWorld("electronAPI", {
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const electron_1 = require("electron");
+electron_1.contextBridge.exposeInMainWorld("electronAPI", {
     // Pi agent communication
-    prompt: (text) => ipcRenderer.invoke("agent:prompt", text),
+    prompt: (text) => electron_1.ipcRenderer.invoke("agent:prompt", text),
     onAgentEvent: (callback) => {
         const listener = (_event, data) => callback(data);
-        ipcRenderer.on("agent:event", listener);
-        return () => ipcRenderer.removeListener("agent:event", listener);
+        electron_1.ipcRenderer.on("agent:event", listener);
+        return () => electron_1.ipcRenderer.removeListener("agent:event", listener);
     },
     // Canvas operations (agent -> renderer)
     onCanvasCommand: (callback) => {
         const listener = (_event, command) => callback(command);
-        ipcRenderer.on("canvas:command", listener);
-        return () => ipcRenderer.removeListener("canvas:command", listener);
+        electron_1.ipcRenderer.on("canvas:command", listener);
+        return () => electron_1.ipcRenderer.removeListener("canvas:command", listener);
     },
     // Test
-    ping: () => ipcRenderer.invoke("ping"),
+    ping: () => electron_1.ipcRenderer.invoke("ping"),
 });

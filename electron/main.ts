@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain, Menu } from "electron";
+import { app, BrowserWindow, globalShortcut, ipcMain, Menu } from "electron";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -17,13 +17,14 @@ function createWindow() {
       preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
+      webSecurity: false,
     },
   });
 
   // Dev mode: load from Vite dev server; Prod: load built files
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
-    mainWindow.webContents.openDevTools();
+    mainWindow.webContents.openDevTools({ mode: 'bottom' });
   } else {
     mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
   }
@@ -36,6 +37,17 @@ function createWindow() {
 app.whenReady().then(() => {
   Menu.setApplicationMenu(null);
   createWindow();
+
+  // Dev shortcuts
+  globalShortcut.register("CommandOrControl+R", () => {
+    mainWindow?.webContents.reload();
+  });
+  globalShortcut.register("F12", () => {
+    mainWindow?.webContents.toggleDevTools();
+  });
+  globalShortcut.register("F5", () => {
+    mainWindow?.webContents.reload();
+  });
 });
 
 app.on("window-all-closed", () => {
