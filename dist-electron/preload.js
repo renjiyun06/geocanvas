@@ -2,8 +2,11 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 const electron_1 = require("electron");
 electron_1.contextBridge.exposeInMainWorld("electronAPI", {
-    // Pi agent communication
-    prompt: (text) => electron_1.ipcRenderer.invoke("agent:prompt", text),
+    // Pi agent session management
+    createSession: (shapeId) => electron_1.ipcRenderer.invoke("agent:create-session", shapeId),
+    prompt: (shapeId, text) => electron_1.ipcRenderer.invoke("agent:prompt", shapeId, text),
+    destroySession: (shapeId) => electron_1.ipcRenderer.invoke("agent:destroy-session", shapeId),
+    // Agent event stream (main -> renderer)
     onAgentEvent: (callback) => {
         const listener = (_event, data) => callback(data);
         electron_1.ipcRenderer.on("agent:event", listener);

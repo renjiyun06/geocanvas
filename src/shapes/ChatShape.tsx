@@ -11,6 +11,7 @@ import {
   type TLBaseShape,
 } from "@tldraw/editor";
 import { useEffect, useRef, useState, useCallback } from "react";
+import type { AgentEvent } from "../types/electron";
 
 // --- Shape type definition ---
 
@@ -19,9 +20,14 @@ const CHAT_SHAPE_TYPE = "chat" as const;
 const HEADER_H = 36;
 const INPUT_H = 56;
 
+type ChatMessageBlock =
+  | { type: "text"; content: string }
+  | { type: "thinking"; content: string }
+  | { type: "tool"; toolName: string; status: "running" | "done" | "error" };
+
 type ChatMessage = {
   role: "user" | "assistant";
-  content: string;
+  blocks: ChatMessageBlock[];
 };
 
 type ChatShapeProps = {
@@ -44,6 +50,7 @@ export function getNextChatLabel(): string {
 // --- In-memory message store (per shape instance) ---
 
 const messageStore = new Map<string, ChatMessage[]>();
+const sessionReady = new Map<string, boolean>();
 
 function getMessages(shapeId: string): ChatMessage[] {
   if (!messageStore.has(shapeId)) {
@@ -52,10 +59,54 @@ function getMessages(shapeId: string): ChatMessage[] {
   return messageStore.get(shapeId)!;
 }
 
-function addMessage(shapeId: string, msg: ChatMessage): ChatMessage[] {
-  const msgs = getMessages(shapeId);
-  msgs.push(msg);
-  return [...msgs];
+// --- Render a message block ---
+
+function MessageBlock({ block }: { block: ChatMessageBlock }) {
+  if (block.type === "thinking") {
+    return (
+      <div
+        style={{
+          fontSize: "12px",
+          color: "#8b5cf6",
+          fontStyle: "italic",
+          borderLeft: "2px solid #8b5cf6",
+          paddingLeft: "8px",
+          marginBottom: "4px",
+          opacity: 0.8,
+        }}
+      >
+        💭 {block.content}
+      </div>
+    );
+  }
+  if (block.type === "tool") {
+    return (
+      <div
+        style={{
+          fontSize: "12px",
+          color: block.status === "error" ? "#ef4444" : "#6b7280",
+          backgroundColor: "#f9fafb",
+          border: "1px solid #e5e7eb",
+          borderRadius: "6px",
+          padding: "4px 8px",
+          marginBottom: "4px",
+        }}
+      >
+        🔧 {block.toolName}{" "}
+        {block.status === "running"
+          ? "⏳"
+          : block.status === "error"
+            ? "❌"
+            : "✅"}
+      </div>
+    );
+  }
+  // text
+  return (
+    <div style={{ whiteSpace: "pre-wrap", wordBreak: "break-word" }}>
+      {block.content}
+    </div>
+  );
 }
 
 // --- Chat component rendered inside the shape ---
@@ -74,9 +125,118 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
   );
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [sessionError, setSessionError] = useState<string | null>(null);
 
   const contentW = shape.props.w;
   const contentH = shape.props.h - HEADER_H;
+
+  const hasElectronAPI = typeof window !== "undefined" && window.electronAPI;
+
+  // Initialize Pi session
+  useEffect(() => {
+    if (!hasElectronAPI) return;
+    if (sessionReady.has(shape.id)) return;
+
+    sessionReady.set(shape.id, false);
+
+    window.electronAPI.createSession(shape.id).then((result) => {
+      if (result.success) {
+        sessionReady.set(shape.id, true);
+      } else {
+        setSessionError(result.error || "Failed to create session");
+      }
+    });
+
+    return () => {
+      // Don't destroy on unmount since tldraw may re-render
+    };
+  }, [shape.id, hasElectronAPI]);
+
+  // Listen for agent events
+  useEffect(() => {
+    if (!hasElectronAPI) return;
+
+    const unsubscribe = window.electronAPI.onAgentEvent((event: AgentEvent) => {
+      if (event.shapeId !== shape.id) return;
+
+      const msgs = getMessages(shape.id);
+
+      switch (event.type) {
+        case "agent_start": {
+          // Add new assistant message
+          msgs.push({ role: "assistant", blocks: [] });
+          setMessages([...msgs]);
+          setIsLoading(true);
+          break;
+        }
+        case "thinking_delta": {
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg?.role === "assistant") {
+            const lastBlock = lastMsg.blocks[lastMsg.blocks.length - 1];
+            if (lastBlock?.type === "thinking") {
+              lastBlock.content += event.delta || "";
+            } else {
+              lastMsg.blocks.push({
+                type: "thinking",
+                content: event.delta || "",
+              });
+            }
+            setMessages([...msgs]);
+          }
+          break;
+        }
+        case "text_delta": {
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg?.role === "assistant") {
+            const lastBlock = lastMsg.blocks[lastMsg.blocks.length - 1];
+            if (lastBlock?.type === "text") {
+              lastBlock.content += event.delta || "";
+            } else {
+              lastMsg.blocks.push({
+                type: "text",
+                content: event.delta || "",
+              });
+            }
+            setMessages([...msgs]);
+          }
+          break;
+        }
+        case "tool_start": {
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg?.role === "assistant") {
+            lastMsg.blocks.push({
+              type: "tool",
+              toolName: event.toolName || "unknown",
+              status: "running",
+            });
+            setMessages([...msgs]);
+          }
+          break;
+        }
+        case "tool_end": {
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg?.role === "assistant") {
+            // Find last running tool block
+            for (let i = lastMsg.blocks.length - 1; i >= 0; i--) {
+              const block = lastMsg.blocks[i];
+              if (block.type === "tool" && block.status === "running") {
+                block.status = event.isError ? "error" : "done";
+                break;
+              }
+            }
+            setMessages([...msgs]);
+          }
+          break;
+        }
+        case "agent_end": {
+          setIsLoading(false);
+          break;
+        }
+      }
+    });
+
+    return unsubscribe;
+  }, [shape.id, hasElectronAPI]);
 
   // Mark events as handled so tldraw skips them when editing
   useEffect(() => {
@@ -93,7 +253,14 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
       }
     };
 
-    const events = ["pointerdown", "pointerup", "click", "wheel", "keydown", "keyup"];
+    const events = [
+      "pointerdown",
+      "pointerup",
+      "click",
+      "wheel",
+      "keydown",
+      "keyup",
+    ];
     for (const evt of events) {
       reactRoot.addEventListener(evt, markAsHandled, true);
     }
@@ -121,21 +288,46 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
     const text = input.trim();
     if (!text || isLoading) return;
 
-    const updated = addMessage(shape.id, { role: "user", content: text });
-    setMessages([...updated]);
+    // Add user message
+    const msgs = getMessages(shape.id);
+    msgs.push({ role: "user", blocks: [{ type: "text", content: text }] });
+    setMessages([...msgs]);
     setInput("");
-    setIsLoading(true);
 
-    // Mock AI response (will be replaced by Pi SDK)
-    setTimeout(() => {
-      const reply = addMessage(shape.id, {
-        role: "assistant",
-        content: `[模拟回复] 收到: "${text}"\n\n这是一个模拟的 AI 回复。接入 Pi SDK 后将会有真实的智能体响应。`,
+    if (hasElectronAPI && sessionReady.get(shape.id)) {
+      // Real Pi SDK call
+      window.electronAPI.prompt(shape.id, text).then((result) => {
+        if (!result.success) {
+          const msgs2 = getMessages(shape.id);
+          msgs2.push({
+            role: "assistant",
+            blocks: [
+              { type: "text", content: `❌ 错误: ${result.error}` },
+            ],
+          });
+          setMessages([...msgs2]);
+          setIsLoading(false);
+        }
       });
-      setMessages([...reply]);
-      setIsLoading(false);
-    }, 800);
-  }, [input, isLoading, shape.id]);
+    } else {
+      // Mock response when not in Electron
+      setIsLoading(true);
+      setTimeout(() => {
+        const msgs2 = getMessages(shape.id);
+        msgs2.push({
+          role: "assistant",
+          blocks: [
+            {
+              type: "text",
+              content: `[模拟回复] 收到: "${text}"\n\n需要在 Electron 环境中运行才能连接 Pi SDK。`,
+            },
+          ],
+        });
+        setMessages([...msgs2]);
+        setIsLoading(false);
+      }, 800);
+    }
+  }, [input, isLoading, shape.id, hasElectronAPI]);
 
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent) => {
@@ -177,7 +369,12 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
       >
         <span>💬 {shape.props.label}</span>
         <span style={{ fontSize: "11px", opacity: 0.8 }}>
-          {messages.length} 条消息{isEditing ? " ✏️" : ""}
+          {sessionError
+            ? "⚠️ 未连接"
+            : sessionReady.get(shape.id)
+              ? "🟢 已连接"
+              : "🔄 连接中..."}
+          {isEditing ? " ✏️" : ""}
         </span>
       </div>
 
@@ -203,7 +400,20 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
             gap: "8px",
           }}
         >
-          {messages.length === 0 && (
+          {sessionError && (
+            <div
+              style={{
+                padding: "8px 12px",
+                borderRadius: "8px",
+                backgroundColor: "#fef2f2",
+                color: "#ef4444",
+                fontSize: "12px",
+              }}
+            >
+              ⚠️ {sessionError}
+            </div>
+          )}
+          {messages.length === 0 && !sessionError && (
             <div
               style={{
                 flex: 1,
@@ -228,19 +438,19 @@ function ChatEmbed({ shape }: { shape: IChatShape }) {
             >
               <div
                 style={{
-                  maxWidth: "80%",
+                  maxWidth: "85%",
                   padding: "8px 12px",
                   borderRadius: "12px",
                   fontSize: "13px",
                   lineHeight: "1.5",
-                  whiteSpace: "pre-wrap",
-                  wordBreak: "break-word",
                   backgroundColor:
                     msg.role === "user" ? "#8b5cf6" : "#f3f4f6",
                   color: msg.role === "user" ? "white" : "#333",
                 }}
               >
-                {msg.content}
+                {msg.blocks.map((block, j) => (
+                  <MessageBlock key={j} block={block} />
+                ))}
               </div>
             </div>
           ))}
