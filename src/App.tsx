@@ -5,6 +5,7 @@ import {
   TldrawUiMenuItem,
   useIsToolSelected,
   useTools,
+  useEditor,
 } from "tldraw";
 import type {
   TLComponents,
@@ -16,6 +17,8 @@ import { GeoGebraShapeUtil } from "./shapes/GeoGebraShape";
 import { GeoGebraTool } from "./shapes/GeoGebraTool";
 import { ChatShapeUtil } from "./shapes/ChatShape";
 import { ChatTool } from "./shapes/ChatTool";
+import { setEditorInstance, setupCanvasIPC } from "./canvas-api";
+import { useEffect } from "react";
 
 // Custom shape utils
 const customShapeUtils = [GeoGebraShapeUtil, ChatShapeUtil];
@@ -78,6 +81,16 @@ const customAssetUrls: TLUiAssetUrlOverrides = {
   },
 };
 
+// Component to capture editor instance
+function EditorCapture() {
+  const editor = useEditor();
+  useEffect(() => {
+    setEditorInstance(editor);
+    setupCanvasIPC();
+  }, [editor]);
+  return null;
+}
+
 function App() {
   return (
     <div style={{ position: "fixed", inset: 0 }}>
@@ -87,7 +100,9 @@ function App() {
         overrides={uiOverrides}
         components={components}
         assetUrls={customAssetUrls}
-      />
+      >
+        <EditorCapture />
+      </Tldraw>
     </div>
   );
 }

@@ -28,6 +28,17 @@ contextBridge.exposeInMainWorld("electronAPI", {
     return () => ipcRenderer.removeListener("agent:event", listener);
   },
 
+  // Canvas query (main -> renderer -> main)
+  onCanvasQuery: (callback: (query: any) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, query: any) =>
+      callback(query);
+    ipcRenderer.on("canvas:query", listener);
+    return () => ipcRenderer.removeListener("canvas:query", listener);
+  },
+
+  canvasQueryResponse: (id: string, result: any) =>
+    ipcRenderer.send("canvas:query-response", id, result),
+
   // Canvas operations (agent -> renderer)
   onCanvasCommand: (callback: (command: unknown) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, command: unknown) =>

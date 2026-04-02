@@ -12,6 +12,8 @@ export interface ElectronAPI {
   prompt: (shapeId: string, text: string) => Promise<{ success: boolean; error?: string }>;
   destroySession: (shapeId: string) => Promise<{ success: boolean }>;
   onAgentEvent: (callback: (event: AgentEvent) => void) => () => void;
+  onCanvasQuery: (callback: (query: any) => void) => () => void;
+  canvasQueryResponse: (id: string, result: any) => void;
   onCanvasCommand: (callback: (command: unknown) => void) => () => void;
   ping: () => Promise<string>;
 }

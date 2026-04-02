@@ -12,6 +12,13 @@ electron_1.contextBridge.exposeInMainWorld("electronAPI", {
         electron_1.ipcRenderer.on("agent:event", listener);
         return () => electron_1.ipcRenderer.removeListener("agent:event", listener);
     },
+    // Canvas query (main -> renderer -> main)
+    onCanvasQuery: (callback) => {
+        const listener = (_event, query) => callback(query);
+        electron_1.ipcRenderer.on("canvas:query", listener);
+        return () => electron_1.ipcRenderer.removeListener("canvas:query", listener);
+    },
+    canvasQueryResponse: (id, result) => electron_1.ipcRenderer.send("canvas:query-response", id, result),
     // Canvas operations (agent -> renderer)
     onCanvasCommand: (callback) => {
         const listener = (_event, command) => callback(command);

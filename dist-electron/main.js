@@ -3,6 +3,7 @@ import path from "path";
 import { fileURLToPath } from "url";
 import { AuthStorage, createAgentSession, ModelRegistry, SessionManager, } from "@mariozechner/pi-coding-agent";
 import { getModel } from "@mariozechner/pi-ai";
+import { createGeoGebraTools, handleCanvasQueryResponse } from "./tools.js";
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 app.commandLine.appendSwitch("no-sandbox");
@@ -21,6 +22,7 @@ async function createSession(shapeId) {
     const model = getModel("anthropic", "claude-opus-4-6");
     if (!model)
         throw new Error("Model claude-opus-4-6 not found");
+    const geogebraTools = createGeoGebraTools(() => mainWindow);
     const { session } = await createAgentSession({
         cwd: getWorkspaceDir(),
         model,
@@ -28,6 +30,7 @@ async function createSession(shapeId) {
         sessionManager: SessionManager.inMemory(),
         authStorage,
         modelRegistry,
+        customTools: geogebraTools,
     });
     // Subscribe to events and forward to renderer
     const unsubscribe = session.subscribe((event) => {
@@ -188,4 +191,8 @@ ipcMain.handle("agent:prompt", async (_event, shapeId, text) => {
 ipcMain.handle("agent:destroy-session", async (_event, shapeId) => {
     destroySession(shapeId);
     return { success: true };
+});
+// Canvas query response from renderer
+ipcMain.on("canvas:query-response", (_event, id, result) => {
+    handleCanvasQueryResponse(id, result);
 });
