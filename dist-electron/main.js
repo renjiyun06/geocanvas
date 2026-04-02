@@ -1,17 +1,16 @@
-"use strict";
-var __importDefault = (this && this.__importDefault) || function (mod) {
-    return (mod && mod.__esModule) ? mod : { "default": mod };
-};
-Object.defineProperty(exports, "__esModule", { value: true });
-const electron_1 = require("electron");
-const path_1 = __importDefault(require("path"));
+import { app, BrowserWindow, ipcMain } from "electron";
+import path from "path";
+import { fileURLToPath } from "url";
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+app.commandLine.appendSwitch("no-sandbox");
 let mainWindow = null;
 function createWindow() {
-    mainWindow = new electron_1.BrowserWindow({
+    mainWindow = new BrowserWindow({
         width: 1400,
         height: 900,
         webPreferences: {
-            preload: path_1.default.join(__dirname, "preload.js"),
+            preload: path.join(__dirname, "preload.js"),
             contextIsolation: true,
             nodeIntegration: false,
         },
@@ -22,24 +21,24 @@ function createWindow() {
         mainWindow.webContents.openDevTools();
     }
     else {
-        mainWindow.loadFile(path_1.default.join(__dirname, "../dist/index.html"));
+        mainWindow.loadFile(path.join(__dirname, "../dist/index.html"));
     }
     mainWindow.on("closed", () => {
         mainWindow = null;
     });
 }
-electron_1.app.whenReady().then(createWindow);
-electron_1.app.on("window-all-closed", () => {
+app.whenReady().then(createWindow);
+app.on("window-all-closed", () => {
     if (process.platform !== "darwin") {
-        electron_1.app.quit();
+        app.quit();
     }
 });
-electron_1.app.on("activate", () => {
+app.on("activate", () => {
     if (mainWindow === null) {
         createWindow();
     }
 });
 // --- IPC handlers (Pi SDK integration will go here) ---
-electron_1.ipcMain.handle("ping", async () => {
+ipcMain.handle("ping", async () => {
     return "pong from main process";
 });
